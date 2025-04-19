@@ -369,15 +369,21 @@ cons[#cons+1] = game:GetService("RunService").RenderStepped:Connect(function(del
 	if vals.nomiss and framework.UI and framework.UI.Misses then
 		framework.UI.Combo += framework.UI.Misses
 		if framework.UI.ScoreCounter then
-			framework.UI.ScoreCounter.Sick += framework.UI.Misses
-			framework.UI.ScoreCounter.Miss = -1
+			framework.UI.ScoreCounter.Sick += (framework.UI.Misses or 0) + (framework.UI.ScoreCounter.Ok or 0) + (framework.UI.ScoreCounter.Bad or 0) + (framework.UI.ScoreCounter.Good or 0)
+			framework.UI.ScoreCounter.Miss = 0
+			framework.UI.Combo = framework.UI.ScoreCounter.Sick
+			framework.UI.TotalHits = framework.UI.ScoreCounter.Sick
+			framework.UI.Accuracy = framework.UI.ScoreCounter.Sick * 100
+			framework.UI.ScoreCounter.Ok = 0
+			framework.UI.ScoreCounter.Bad = 0
+			framework.UI.ScoreCounter.Good = 0
 		end
 		framework.UI.Misses = 0
 	end
 	if vals.combo then
 		framework.UI.Combo = 9999 - 1
 		framework.UI.TotalHits = 9999 - 1
-		framework.UI.Accuracy = 9999 - 1
+		framework.UI.Accuracy = (9999 - 1) * 100
 		if framework.UI.ScoreCounter then
 			framework.UI.ScoreCounter.Ok = 0
 			framework.UI.ScoreCounter.Bad = 0
@@ -393,9 +399,7 @@ end)
 task.spawn(function()
 	while not closed and task.wait(0) do
 		if vals.infscore then
-			for i=1, 3 do
-				task.spawn(gainScore, 50000)
-			end
+			task.spawn(gainScore, 50000)
 		end
 	end
 end)
@@ -570,10 +574,4 @@ end})
 
 if getfenv().hookmetamethod then
 	page:AddLabel({Caption = "Warning: Giving score can be buggy when max score or mega score options are enabled.\nAlso might break on multiplayer"})
-end
-
-task.wait(5)
-
-if sucks then
-	task.spawn(lib.Notifications.Notification, lib.Notifications, {Time = 30, Title = "Delta sucks", Text = "Delta sucks:\n99% chance of autoplayer wont work"})
 end
