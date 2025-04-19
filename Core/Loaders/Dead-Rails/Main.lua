@@ -1,3 +1,5 @@
+getfenv().getgenv().GameName = "Dead-Rails"
+
 local defaults = {
 	ESP = {
 		["Money BagESP"] = false,
@@ -426,6 +428,13 @@ local function insertCum(str)
 	return new:gsub("  ", " "):gsub("_", "") .. ""
 end
 
+local function startDrag(object)
+	game:GetService("ReplicatedStorage"):FindFirstChild("RequestStartDrag", math.huge):FireServer(object)
+end
+local function stopDrag()
+	game:GetService("ReplicatedStorage"):FindFirstChild("RequestStopDrag", math.huge):FireServer()
+end
+
 local function getSelectedObject()
 	return game:GetService("ReplicatedStorage").Client.Handlers.DraggableItemHandlers.ClientDraggableObjectHandler.DragHighlight.Adornee
 end
@@ -435,7 +444,7 @@ local function throwObject(object)
 		return
 	end
 
-	game:GetService("ReplicatedStorage").Shared.Remotes.RequestStartDrag:FireServer(object)
+	startDrag(object)
 
 	local par
 
@@ -482,7 +491,7 @@ local function throwObject(object)
 	
 	task.wait(0.1)
 
-	game:GetService("ReplicatedStorage").Shared.Remotes.RequestStopDrag:FireServer()
+	stopDrag()
 end
 
 local function throw()
@@ -585,7 +594,7 @@ local function getText(obj)
 		return "Jade Tablet"
 	end
 
-	return insertCum(n)
+	return insertCum(n):gsub("Model ", "") .. ""
 end
 
 local function getBase(obj)
@@ -615,7 +624,7 @@ local function getItemText(object)
 		otherText = otherText .. '<font color="rgb(50,50,50)">Fuel: <b>' .. (math.round((fuel / 240) * 1000) / 10) .. "%</b></font>\n"
 	end
 	
-	return text .. (otherText:gsub(" ", ""):gsub("\n", ""):gsub("\r", ""):gsub("\t", "") ~= "" and otherText:sub(1, #otherText - 1) or "")
+	return (text .. (otherText:gsub(" ", ""):gsub("\n", ""):gsub("\r", ""):gsub("\t", "") ~= "" and otherText:sub(1, #otherText - 1) or "")):gsub("Model ", "") .. ""
 end
 
 local checked = {}
@@ -626,7 +635,7 @@ local function main(v)
 		if v:IsA("ProximityPrompt") and not oprompts[v] then
 			oprompts[v] = v.MaxActivationDistance
 			v.MaxActivationDistance = oprompts[v] * vals.ExtraPP
-		elseif v:IsA("Humanoid") and not game:GetService("Players"):GetPlayerFromCharacter(v.Parent) then
+		elseif v:IsA("Humanoid") and not game:GetService("Players"):GetPlayerFromCharacter(v.Parent) and not print(v.Parent) then
 			checked[v] = true
 			checked[v.Parent] = true
 			
@@ -647,7 +656,7 @@ local function main(v)
 				remove(monsters, v.Parent)
 
 				return espFunc(v.Parent, dead)
-			elseif v:GetAttribute("BloodColor") then
+			elseif v.Parent:GetAttribute("BloodColor") then
 				local animal = esps[v.Parent.Name] or {HighlightEnabled = true, Color = getColor(v.Parent), Text = getItemText(v.Parent), ESPName = "AnimalESP"}
 				esps[v.Name] = animal
 
@@ -720,7 +729,7 @@ local getClosestMonster; getClosestMonster = function(mode)
 	if mode == "Angle" and workspace.CurrentCamera then
 		local a, d, m = math.huge, math.huge, nil
 		for i,v in monsters do
-			if v and v.Parent and not isDead(v) and not v:GetAttribute("Reanimated") then
+			if v and v.Parent and not isDead(v) and not v:GetAttribute("Reanimated") and not v:GetAttribute("Tamed") then
 				if vals.Raycast and raycast(workspace.CurrentCamera.CFrame.Position, v.GetPivot(v).Position, v.GetDescendants(v)) then
 					continue
 				end
@@ -733,6 +742,8 @@ local getClosestMonster; getClosestMonster = function(mode)
 					a = an
 					m = v
 				end
+			else
+				remove(monsters, v)
 			end
 		end
 
@@ -740,12 +751,14 @@ local getClosestMonster; getClosestMonster = function(mode)
 	elseif mode == "Random" then
 		local allowedMonsters = {}
 		for i,v in monsters do
-			if v and v.Parent and not isDead(v) and not v:GetAttribute("Reanimated") then
+			if v and v.Parent and not isDead(v) and not v:GetAttribute("Reanimated") and not v:GetAttribute("Tamed") then
 				if vals.Raycast and raycast(workspace.CurrentCamera.CFrame.Position, v.GetPivot(v).Position, v.GetDescendants(v)) then
 					continue
 				end
 
 				add(allowedMonsters, v)
+			else
+				remove(monsters, v)
 			end
 		end
 
@@ -758,7 +771,7 @@ local getClosestMonster; getClosestMonster = function(mode)
 	else
 		local d, m = math.huge, nil
 		for i,v in monsters do
-			if v and v.Parent and not isDead(v) and not v:GetAttribute("Reanimated") then
+			if v and v.Parent and not isDead(v) and not v:GetAttribute("Reanimated") and not v:GetAttribute("Tamed") then
 				if vals.Raycast and raycast(workspace.CurrentCamera.CFrame.Position, v.GetPivot(v).Position, v.GetDescendants(v)) then
 					continue
 				end
@@ -769,6 +782,8 @@ local getClosestMonster; getClosestMonster = function(mode)
 					d = di
 					m = v
 				end
+			else
+				remove(monsters, v)
 			end
 		end
 
@@ -955,6 +970,7 @@ local void = pcall(function()
 	workspace.FallenPartsDestroyHeight = workspace.FallenPartsDestroyHeight
 end)
 
+local items = workspace.RuntimeItems
 local oilCooldown = false
 cons[#cons+1] = game:GetService("RunService").RenderStepped:Connect(function()
 	txtf("ClearText")
@@ -1020,7 +1036,7 @@ cons[#cons+1] = game:GetService("RunService").RenderStepped:Connect(function()
 		if vals.AutoPickTools then
 			for i,v in tools do
 				if v and v.Parent then
-					if (v:GetPivot().Position - plr.Character:GetPivot().Position).Magnitude <= 30 then
+					if v.Parent == items and not v:GetAttribute("BuyPrice") and (v:GetPivot().Position - plr.Character:GetPivot().Position).Magnitude <= 30 then
 						game:GetService("ReplicatedStorage").Remotes.Tool.PickUpTool:FireServer(v)
 					end
 				else
@@ -1031,7 +1047,7 @@ cons[#cons+1] = game:GetService("RunService").RenderStepped:Connect(function()
 		if vals.AutoPickOther then
 			for i,v in other do
 				if v and v.Parent then
-					if (v:GetPivot().Position - plr.Character:GetPivot().Position).Magnitude <= 30 then
+					if v.Parent == items and not v:GetAttribute("BuyPrice") and (v:GetPivot().Position - plr.Character:GetPivot().Position).Magnitude <= 30 then
 						game:GetService("ReplicatedStorage").Packages.RemotePromise.Remotes.C_ActivateObject:FireServer(v)
 					end
 				else
@@ -1042,7 +1058,7 @@ cons[#cons+1] = game:GetService("RunService").RenderStepped:Connect(function()
 		if vals.AutoPickBonds then
 			for i,v in bonds do
 				if v and v.Parent then
-					if (v:GetPivot().Position - plr.Character:GetPivot().Position).Magnitude <= 30 then
+					if v.Parent == items and not v:GetAttribute("BuyPrice") and (v:GetPivot().Position - plr.Character:GetPivot().Position).Magnitude <= 30 then
 						game:GetService("ReplicatedStorage").Packages.RemotePromise.Remotes.C_ActivateObject:FireServer(v)
 					end
 				else
@@ -1053,7 +1069,7 @@ cons[#cons+1] = game:GetService("RunService").RenderStepped:Connect(function()
 		if vals.AutoPickArmor then
 			for i,v in equippables do
 				if v and v.Parent then
-					if (v:GetPivot().Position - plr.Character:GetPivot().Position).Magnitude <= 30 then
+					if v.Parent == items and not v:GetAttribute("BuyPrice") and (v:GetPivot().Position - plr.Character:GetPivot().Position).Magnitude <= 30 then
 						game:GetService("ReplicatedStorage").Remotes.Object.EquipObject:FireServer(v)
 					end
 				else
@@ -1083,7 +1099,7 @@ cons[#cons+1] = game:GetService("ProximityPromptService").PromptButtonHoldBegan:
 	end
 end)
 
-local window = lib:MakeWindow({Title = "NullFire: Dead Rails", CloseCallback = function()
+local window = lib:MakeWindow({Title = "NullFire - Dead Rails", CloseCallback = function()
 	for i,v in defaults do
 		vals[i] = v
 	end
