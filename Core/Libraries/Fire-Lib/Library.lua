@@ -2722,7 +2722,7 @@ if not pcall(function()
         themes = game:GetService("HttpService"):JSONDecode(game:HttpGet("https://raw.githubusercontent.com/InfernusScripts/Null-Fire/refs/heads/main/Core/Data/Theme.json"))
     end) then
     versions = {
-        ["FireLibraryVersion"] = "5.4.0",
+        ["FireLibraryVersion"] = "5.4.2",
         ["FireHubVersion"] = "4.0.2"
     }
     themes = {
@@ -2936,10 +2936,11 @@ local function updateFloatingKeybinds(binds, list, colors)
     
     maxX = math.max(maxX, 200)
     local y = ((#children - 2) * 15) + (2 * math.max((#children - 2) - 1, 0)) + 30
+
+    binds.Visible = true
     
     if prevLen == 2 then
         binds.Size = UDim2.fromOffset(maxX, 30)
-        binds.Visible = true
     end
     
     binds:TweenSize(UDim2.fromOffset(maxX, y), Enum.EasingDirection.Out, Enum.EasingStyle.Sine, 0.25, true)
@@ -3217,6 +3218,7 @@ local lib; lib = {
             }),
             Opened = true,
             Close = function(self)
+                coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                 task.spawn(function()
                     while cd and task.wait() do end
                     self.Opened = false
@@ -3230,15 +3232,18 @@ local lib; lib = {
                 end)
             end,
             Show = function(self)
-                if cd then return false end
+                coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                 task.spawn(function()
-                    -- for some reason window:TweenSize does not work :|
+                    while cd and task.wait() do end
                     cd = true
                     maximize.Visible = isMobile
                     window.Visible = true
                     game:GetService("TweenService"):Create(window, TweenInfo.new(fadeTime / 2.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = size}):Play()
                     game:GetService("TweenService"):Create(window.HolderFrame.StarterFade, TweenInfo.new(fadeTime, Enum.EasingStyle.Exponential, Enum.EasingDirection.In), {BackgroundTransparency = 1}):Play()
-                    task.wait(fadeTime + 0.01)
+                    task.wait(fadeTime / 2.5)
+                    coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
+                    task.wait(fadeTime - (fadeTime / 2.5) + 0.01)
+                    coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                     cd = false
                     window.HolderFrame.StarterFade.ZIndex -= 1000
                     window.HolderFrame.StarterFade.Visible = false
@@ -3246,6 +3251,7 @@ local lib; lib = {
                 return true
             end,
             Toggle = function(self, state)
+                coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                 if state == nil then
                     state = window.Visible
                 else
@@ -3258,15 +3264,19 @@ local lib; lib = {
                 end
             end,
             Hide = function(self)
-                if cd then return false end
+                coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                 task.spawn(function()
+                    while cd and task.wait() do end
                     cd = true
                     maximize.Visible = isMobile
                     window.HolderFrame.StarterFade.Visible = true
                     window.HolderFrame.StarterFade.ZIndex += 1000
                     game:GetService("TweenService"):Create(window, TweenInfo.new(fadeTime, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {Size = UDim2.fromScale(0,0)}):Play()
                     game:GetService("TweenService"):Create(window.HolderFrame.StarterFade, TweenInfo.new(fadeTime / 2.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.In), {BackgroundTransparency = 0}):Play()
-                    task.wait(fadeTime + 0.01)
+                    task.wait(fadeTime / 2.5)
+                    coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
+                    task.wait(fadeTime - (fadeTime / 2.5) + 0.01)
+                    coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                     cd = false
                     window.Visible = false
                 end)
@@ -3709,6 +3719,7 @@ local lib; lib = {
                         
                         local cb = function()
                             struct[counterText.."_Keybind"] = bind[2] and bind[2].Value or nil
+                            coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                             getCallback(options)()
                         end
                         cons[#cons+1] = button.Trigger.MouseEnter:Connect(function()
@@ -3716,7 +3727,12 @@ local lib; lib = {
                         end)
                         cons[#cons+1] = button.Trigger.MouseButton1Click:Connect(function()
                             playSound("Click")
-                            getCallback(options)()
+                            coroutineCall(cb)()
+                            bind[3] = true
+                            updateFloatingKeybinds(keybinds, binds, colors)
+                            task.wait(0.1)
+                            bind[3] = false
+                            updateFloatingKeybinds(keybinds, binds, colors)
                         end)
                         
                         local allowKeybinds = typeof(options.AllowKeybinds) == "boolean" and options.AllowKeybins or typeof(options.Keybinds) == "boolean" and options.Keybinds or typeof(options.AllowKeybinds) ~= "boolean" and typeof(options.Keybinds) ~= "boolean" and true
@@ -3736,7 +3752,6 @@ local lib; lib = {
                                 bind[3] = true
 
                                 playSound("Click")
-                                coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                                 cb()
                             end)
                             cons[#cons+1] = game:GetService("UserInputService").InputEnded:Connect(function(input, chat)
@@ -3744,7 +3759,6 @@ local lib; lib = {
 
                                 bind[3] = false
 
-                                --getCallback(options)(false)
                                 updateFloatingKeybinds(keybinds, binds, colors)
                             end)
                             
@@ -3761,8 +3775,9 @@ local lib; lib = {
                                         focused = false
                                         con:Disconnect()
                                         con = nil
+                                        inpt = nil
+                                        game:GetService("RunService").RenderStepped:Wait()
                                         inpt = s.KeyCode
-                                        task.wait()
                                         bind[2] = inpt
                                         button.InputOuter.Frame.Input.Text = inpt and inpt.Name or "None"
                                         updateFloatingKeybinds(keybinds, binds, colors)
@@ -3770,7 +3785,8 @@ local lib; lib = {
 
                                     cons[#cons+1] = con
                                 else
-                                    task.wait()
+                                    inpt = nil
+                                    game:GetService("RunService").RenderStepped:Wait()
                                     inpt = nil
                                     bind[2] = inpt
                                     button.InputOuter.Frame.Input.Text = inpt and inpt.Name or "None"
@@ -3836,7 +3852,173 @@ local lib; lib = {
                             if val then
                                 local keybind = val[counterText.."_Keybind"]
                                 if keybind then
+                                    inpt = nil
+                                    game:GetService("RunService").RenderStepped:Wait()
                                     bind[2] = Enum.KeyCode:FromValue(keybind)
+                                    inpt = bind[2]
+                                    coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
+                                end
+                            end
+                        end)
+
+                        return funcs
+                    end,
+                    AddHoldableButton = function(self, options)
+                        options = getOptions(options)
+
+                        local button = objs.Button:Clone()
+                        button.Parent = page
+                        button.Visible = true
+                        button.Name = ""
+                        button:FindFirstChild("Text").Text = getText(options) or "Button"
+                        local counterText = count(text, 2)
+
+                        local focused = false
+                        local keybind = typeof(options.Keybind) == "EnumItem" and options.Keybind or typeof(options.Keybind) == "string" and Enum.KeyCode:FromName(options.Keybind) or typeof(options.Keybind) == "number" and Enum.KeyCode:FromValue(options.Keybind) or nil
+                        local con, inpt = nil, keybind
+                        local bind = {button.Text.Text, keybind, false}
+
+                        local cb = function(b)
+                            struct[counterText.."_Keybind"] = bind[2] and bind[2].Value or nil
+                            coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
+                            getCallback(options)(b)
+                        end
+                        cons[#cons+1] = button.Trigger.MouseEnter:Connect(function()
+                            playSound("MouseHover")
+                        end)
+                        cons[#cons+1] = button.Trigger.MouseButton1Down:Connect(function()
+                            bind[3] = true
+                            playSound("Click")
+                            cb(true)
+                        end)
+                        cons[#cons+1] = button.Trigger.MouseButton1Up:Connect(function()
+                            bind[3] = false
+                            playSound("Click")
+                            cb(false)
+                        end)
+
+                        local allowKeybinds = typeof(options.AllowKeybinds) == "boolean" and options.AllowKeybins or typeof(options.Keybinds) == "boolean" and options.Keybinds or typeof(options.AllowKeybinds) ~= "boolean" and typeof(options.Keybinds) ~= "boolean" and true
+
+                        button.InputOuter.Frame.Input.Text = inpt and inpt.Name or "None"
+
+                        button.Trigger.Size = (isMobile or not allowKeybinds) and UDim2.fromScale(1, 1) or UDim2.fromScale(0.7, 1)
+                        button.KeybindTrigger.Visible = not (isMobile or not allowKeybinds)
+                        button.InputOuter.Visible = button.KeybindTrigger.Visible
+
+                        if allowKeybinds then
+                            binds[#binds+1] = bind
+
+                            cons[#cons+1] = game:GetService("UserInputService").InputBegan:Connect(function(input, chat)
+                                if chat or input.KeyCode ~= inpt or focused then return end
+
+                                bind[3] = true
+
+                                playSound("Click")
+                                cb(true)
+                            end)
+                            cons[#cons+1] = game:GetService("UserInputService").InputEnded:Connect(function(input, chat)
+                                if chat or input.KeyCode ~= inpt or focused then return end
+
+                                bind[3] = false
+
+                                playSound("Click")
+                                cb(false)
+                            end)
+
+                            cons[#cons+1] = button.KeybindTrigger.MouseEnter:Connect(function()
+                                playSound("MouseHover")
+                            end)
+                            cons[#cons+1] = button.KeybindTrigger.MouseButton1Click:Connect(function()
+                                playSound("Click")
+                                focused = not focused
+                                button.InputOuter.Frame.Input.Text = "..."
+                                if focused then
+                                    con = game:GetService("UserInputService").InputBegan:Connect(function(s, chat)
+                                        if chat or table.find(blockedCodes, s.KeyCode) then return end
+                                        focused = false
+                                        con:Disconnect()
+                                        con = nil
+                                        inpt = nil
+                                        game:GetService("RunService").RenderStepped:Wait()
+                                        inpt = s.KeyCode
+                                        bind[2] = inpt
+                                        button.InputOuter.Frame.Input.Text = inpt and inpt.Name or "None"
+                                        updateFloatingKeybinds(keybinds, binds, colors)
+                                    end)
+
+                                    cons[#cons+1] = con
+                                else
+                                    inpt = nil
+                                    game:GetService("RunService").RenderStepped:Wait()
+                                    inpt = nil
+                                    bind[2] = inpt
+                                    button.InputOuter.Frame.Input.Text = inpt and inpt.Name or "None"
+                                    if con then
+                                        con:Disconnect()
+                                        con = nil
+                                    end
+                                    updateFloatingKeybinds(keybinds, binds, colors)
+                                end
+                            end)
+                        end
+
+                        local funcs = {}
+                        funcs.Object = button
+
+                        addClass("Back", "BackgroundColor3", button.Separator2)
+                        addClass("Back", "BackgroundColor3", button.Separator)
+                        addClass("Back", "BackgroundColor3", button.ButtonOuter)
+                        addClass("Back", "BackgroundColor3", button.ButtonOuter.Frame)
+                        addClass("Main", "ImageColor3", button.ButtonOuter.Frame.ImageLabel)
+                        addClass("Text", "TextColor3", button:FindFirstChild("Text"))
+
+                        addClass("Back", "BackgroundColor3", button.InputOuter)
+                        addClass("Back", "BackgroundColor3", button.InputOuter.Frame)
+                        addClass("Main", "TextColor3", button.InputOuter.Frame.Input)
+
+                        windowFuncs.Tabs[counterTextPage][count(getText(options) or "Object", 2)] = funcs
+                        function funcs:Destroy()
+                            if not self or not self.Object then return end
+                            self.Object:Destroy()
+                        end
+                        function funcs:Hide()
+                            if not self or not self.Object then return end
+                            self.Object.Visible = false
+                        end
+                        function funcs:Show()
+                            if not self or not self.Object then return end
+                            self.Object.Visible = true
+                        end
+                        function funcs:Visible(bool)
+                            if not self or not self.Object then return end
+                            self.Object.Visible = not not bool
+                        end
+                        function funcs:SetCallback(cb)
+                            if not self or not self.Object then return end
+                            self.Options.Callback = function(b)
+                                return cb(b)
+                            end
+                            self.Options.CB = self.Options.Callback
+                        end
+                        function funcs:SetText(txt)
+                            if not self or not self.Object then return end
+                            self.Object:FindFirstChild("Text").Text = tostring(txt)
+                            bind[1] = tostring(txt)
+                        end
+
+                        cons[#cons+1] = configEvent.Event:Connect(function(config)
+                            if options.IgnoreConfig or options.IgnoreConfigs then return end
+                            local val = config[counterTextPage]
+                            if val then
+                                val = val[counterText]
+                            end
+                            if val then
+                                local keybind = val[counterText.."_Keybind"]
+                                if keybind then
+                                    inpt = nil
+                                    game:GetService("RunService").RenderStepped:Wait()
+                                    bind[2] = Enum.KeyCode:FromValue(keybind)
+                                    inpt = bind[2]
                                     coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                                 end
                             end
@@ -3910,8 +4092,9 @@ local lib; lib = {
                                         focused = false
                                         con:Disconnect()
                                         con = nil
+                                        inpt = nil
+                                        game:GetService("RunService").RenderStepped:Wait()
                                         inpt = s.KeyCode
-                                        task.wait()
                                         bind[2] = inpt
                                         toggle.InputOuter.Frame.Input.Text = inpt and inpt.Name or "None"
                                         updateFloatingKeybinds(keybinds, binds, colors)
@@ -3919,7 +4102,8 @@ local lib; lib = {
 
                                     cons[#cons+1] = con
                                 else
-                                    task.wait()
+                                    inpt = nil
+                                    game:GetService("RunService").RenderStepped:Wait()
                                     inpt = nil
                                     bind[2] = inpt
                                     toggle.InputOuter.Frame.Input.Text = inpt and inpt.Name or "None"
@@ -3999,7 +4183,10 @@ local lib; lib = {
                             if val then
                                 local keybind = val[counterText.."_Keybind"]
                                 if keybind then
+                                    inpt = nil
+                                    game:GetService("RunService").RenderStepped:Wait()
                                     bind[2] = Enum.KeyCode:FromValue(keybind)
+                                    inpt = bind[2]
                                     coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
                                 end
                                 funcs:Set(val)
@@ -4725,10 +4912,33 @@ local lib; lib = {
             end
         end
 
-        -- page:AddLabel({Text = "NullFire Version: "..versions.FireHubVersion})
+        if getGlobalTable().FireHubLoaded then
+            page:AddLabel({Text = "NullFire Version: "..versions.FireHubVersion})
+        end
         page:AddLabel({Text = "FireLib Version: "..versions.FireLibraryVersion})
         page:AddLabel({Text = "Executor Name & Version: " .. execName .. "; " .. execVersion})
         page:AddSeparator()
+        
+        local emulator, realPlatform = false, nil
+        local s, platform = pcall(game:GetService("UserInputService").GetPlatform, game:GetService("UserInputService"))
+        if s then
+            realPlatform = platform
+            local isMobilePlatform = table.find({Enum.Platform.IOS, Enum.Platform.Android, Enum.Platform.Ouya, Enum.Platform.AndroidTV}, platform)
+            if isMobilePlatform and not isMobile or isMobile and not isMobilePlatform then
+                emulator = true
+            end
+        end
+        
+        if platform ~= Enum.Platform.Windows and platform ~= Enum.Platform.IOS and platform ~= Enum.Platform.Android then
+            platform = not isMobile and Enum.Platform.Windows or Enum.Platform.Android
+        end
+
+        page:AddLabel({Text = "Emulation detected: ".. (emulator and "Yes" or "No")})
+        page:AddLabel({Text = "Current NullFire version: ".. (isMobile and "Mobile" or "PC")})
+        page:AddLabel({Text = "Current platform: ".. (realPlatform or platform).Name})
+
+        page:AddSeparator()
+        
         if configsEnabled then
             local function load(got)
                 for i,v in got do
@@ -4749,6 +4959,8 @@ local lib; lib = {
                     end
                 end
                 configEvent:Fire(got)
+
+                coroutineCall(updateFloatingKeybinds)(keybinds, binds, colors)
             end
             local currentConfig = ""
             page:AddTextBox({Text = "Config name", NeedEnter = false, Callback = function(text)
@@ -4798,23 +5010,30 @@ local lib; lib = {
                 writefile("AutoLoad"..suffix..".skibidi", text)
             end, IgnoreConfigs = true})
             local s,e = task.spawn(function()
-                task.wait(0.5)
-                local content = readfile("AutoLoad"..suffix..".skibidi")
-                content = content:gsub("\n", ""):gsub("\r", "")
-
-                if content:gsub(" ", ""):gsub("\t", "") == "" then return end
-                tb:Set(content)
-
-                local s,got = pcall(readfile, prefix..content..suffix)
-                if not s then
-                    return lib.Notifications:Notification({Title = "Uh oh!", Text = "Config called \""..content.."\" not found!"})
+                for i=1, 3 do
+                    game:GetService("RunService").RenderStepped:Wait()
+                    task.wait(0.1)
+                    game:GetService("RunService").RenderStepped:Wait()
                 end
-                if got then
-                    got = game:GetService("HttpService"):JSONDecode(got)
+                local s, content = pcall(readfile, "AutoLoad"..suffix..".skibidi")
+                
+                if s then
+                    content = content:gsub("\n", ""):gsub("\r", "")
+
+                    if content:gsub(" ", ""):gsub("\t", "") == "" then return end
+                    tb:Set(content)
+
+                    local s,got = pcall(readfile, prefix..content..suffix)
+                    if not s then
+                        return lib.Notifications:Notification({Title = "Uh oh!", Text = "Config called \""..content.."\" not found!"})
+                    end
+                    if got then
+                        got = game:GetService("HttpService"):JSONDecode(got)
+                    end
+                    if not got then return end
+                    load(got)
+                    lib.Notifications:Notification({Title = "Success", Text = "Config \""..content.."\" has been loaded!"})
                 end
-                if not got then return end
-                load(got)
-                lib.Notifications:Notification({Title = "Success", Text = "Config \""..content.."\" has been loaded!"})
             end)
         else
             page:AddLabel({Text = execName .. " does not support configs!"})
@@ -4828,9 +5047,9 @@ local lib; lib = {
                 new[i] = tonumber(new[i]) or 0
             end
 
-            new[1] = math.clamp(new[1], 0.5, 1.75)
+            new[1] = isMobile and math.clamp(new[1], 0.5, 1.75) or math.clamp(new[1], 0.3, 2)
             new[2] = math.max(new[2], 0)
-            new[3] = math.clamp(new[3], 0.5, 1)
+            new[3] = math.clamp(new[3], isMobile and 0.5 or 0.3, 1)
             new[4] = math.max(new[4], 0)
 
             size = UDim2.new(new[1], new[2], new[3], new[4])
@@ -5028,14 +5247,6 @@ local lib; lib = {
             return i .. "%"
         end})
         
-        coroutineCall(function()
-            updateFloatingKeybinds(keybinds, binds, colors)
-            for i=1, 30 do
-                task.wait(0.01)
-                keybinds.Visible = true
-            end
-        end)()
-
         return windowFuncs
     end,
     IsMobile = isMobile
