@@ -29,7 +29,7 @@ local defaults = {
 	SilentAim = false,
 	Mode = "Distance",
 	NoVoid = false,
-	SaveBulltets = false,
+	SaveBults = false,
 	AutoThrottle = false,
 	FastKillaura = false,
 	AutoComplete = false,
@@ -45,7 +45,14 @@ local defaults = {
 	ThrowPower = 100,
 	
 	ForceNoclip = false,
-	Running = false
+	Running = false,
+	
+	Spectating = false,
+	SpectatePlayer = nil,
+	SpectateZoom = 10,
+	SpectateAngle = 0,
+	SpectateAutoRotate = false,
+	SpectateHeight = 5
 }
 
 local vals = table.clone(defaults)
@@ -807,7 +814,7 @@ if hmm and gncm then
 
 				args[3] = CFrame.lookAt(head.Position + Vector3.new(0, 1), head.Position)
 				args[4] = hits
-			elseif vals.SaveBullets then
+			elseif vals.SaveBults then
 				args[2].ClientWeaponState.CurrentAmmo.Value = args[2].ClientWeaponState.CurrentAmmo.Value + 1
 				error("Cancel shoot", 0)
 			end
@@ -815,7 +822,7 @@ if hmm and gncm then
 			if d <= vals.KAR then
 				return s.FireServer(s, unpack(args))
 			end
-		elseif vals.SaveBullets and self == s and gncm() == "FireServer" and not getClosestMonster() then
+		elseif vals.SaveBults and self == s and gncm() == "FireServer" and not getClosestMonster() then
 			local args = { ... }
 			args[2].ClientWeaponState.CurrentAmmo.Value = args[2].ClientWeaponState.CurrentAmmo.Value + 1
 			
@@ -993,6 +1000,30 @@ cons[#cons+1] = game:GetService("RunService").RenderStepped:Connect(function()
 	if vals.NC then
 		plr.CameraMode = Enum.CameraMode.Classic
 	end
+	if vals.Spectating and vals.SpectatePlayer and vals.SpectatePlayer.Character and vals.SpectatePlayer.Character:FindFirstChild("HumanoidRootPart") then
+		workspace.CurrentCamera.CameraSubject = vals.SpectatePlayer.Character.HumanoidRootPart
+		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+		
+		local playerPos = vals.SpectatePlayer.Character.HumanoidRootPart.Position
+		
+		-- Обновляем угол автоповорота камеры если включен
+		if vals.SpectateAutoRotate then
+			vals.SpectateAngle = (vals.SpectateAngle + 0.5) % 360
+		end
+		
+		-- Вычисляем позицию камеры с учетом угла и высоты
+		local angle = math.rad(vals.SpectateAngle)
+		local cameraOffset = Vector3.new(
+			math.sin(angle) * vals.SpectateZoom, 
+			vals.SpectateHeight, 
+			math.cos(angle) * vals.SpectateZoom
+		)
+		
+		workspace.CurrentCamera.CFrame = CFrame.new(playerPos + cameraOffset, playerPos)
+	elseif not vals.Spectating and plr.Character and plr.Character:FindFirstChild("Humanoid") then
+		workspace.CurrentCamera.CameraSubject = plr.Character.Humanoid
+		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+	end
 	if void then
 		workspace.FallenPartsDestroyHeight = vals.NoVoid and 0/0 or -500
 	end
@@ -1112,6 +1143,13 @@ local window = lib:MakeWindow({Title = "NullFire - Dead Rails", CloseCallback = 
 			i.MaxActivationDistance = v
 		end
 	end
+	
+	-- Сбрасываем спектатор при закрытии меню
+	if vals.Spectating and plr.Character and plr.Character:FindFirstChild("Humanoid") then
+		workspace.CurrentCamera.CameraSubject = plr.Character.Humanoid
+		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+	end
+	
 	getGlobalTable().FireHubLoaded = false
 	closed = true
 
@@ -1239,6 +1277,186 @@ end})
 
 page:AddSeparator()
 
+page:AddToggle({Caption = "Спектатор", Default = false, Callback = function(b)
+	vals.Spectating = b
+	
+	if not b and plr.Character and plr.Character:FindFirstChild("Humanoid") then
+		workspace.CurrentCamera.CameraSubject = plr.Character.Humanoid
+		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+	elseif b then
+		local players = {}
+		local playerNames = {}
+		
+		for _, player in pairs(game.Players:GetPlayers()) do
+			if player ~= plr then
+				table.insert(players, player)
+				table.insert(playerNames, player.Name)
+			end
+		end
+		
+		if #players == 0 then
+			lib.Notifications:Notification({Title = "Спектатор", Text = "Нет других игроков для наблюдения!"})
+			vals.Spectating = false
+			return
+		end
+		
+		vals.SpectatePlayer = players[1]
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Наблюдение за: " .. vals.SpectatePlayer.Name})
+	end
+end})
+
+local playerDropdown
+page:AddButton({Caption = "Выбрать игрока для наблюдения", Callback = function()
+	if not vals.Spectating then 
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Сначала включите режим наблюдения!"})
+		return
+	end
+
+	local players = {}
+	local playerNames = {}
+	
+	for _, player in pairs(game.Players:GetPlayers()) do
+		if player ~= plr then
+			table.insert(players, player)
+			table.insert(playerNames, player.Name)
+		end
+	end
+	
+	if #players == 0 then
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Нет других игроков для наблюдения!"})
+		return
+	end
+	
+	playerDropdown = page:AddDropdown({
+		Text = "Игроки", 
+		Default = vals.SpectatePlayer and vals.SpectatePlayer.Name or playerNames[1], 
+		Rows = playerNames, 
+		Callback = function(name)
+			for i, playerName in ipairs(playerNames) do
+				if playerName == name then
+					vals.SpectatePlayer = players[i]
+					lib.Notifications:Notification({Title = "Спектатор", Text = "Наблюдение за: " .. vals.SpectatePlayer.Name})
+					break
+				end
+			end
+		end
+	})
+end})
+
+page:AddButton({Caption = "Следующий игрок", Callback = function()
+	if not vals.Spectating then 
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Сначала включите режим наблюдения!"})
+		return
+	end
+
+	local players = {}
+	
+	for _, player in pairs(game.Players:GetPlayers()) do
+		if player ~= plr then
+			table.insert(players, player)
+		end
+	end
+	
+	if #players == 0 then
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Нет других игроков для наблюдения!"})
+		return
+	end
+	
+	local currentIndex = 1
+	for i, player in ipairs(players) do
+		if player == vals.SpectatePlayer then
+			currentIndex = i
+			break
+		end
+	end
+	
+	local nextIndex = currentIndex % #players + 1
+	vals.SpectatePlayer = players[nextIndex]
+	lib.Notifications:Notification({Title = "Спектатор", Text = "Наблюдение за: " .. vals.SpectatePlayer.Name})
+end})
+
+page:AddButton({Caption = "Обновить список игроков", Callback = function()
+	if not vals.Spectating then 
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Сначала включите режим наблюдения!"})
+		return
+	end
+	
+	local players = {}
+	local playerNames = {}
+	
+	for _, player in pairs(game.Players:GetPlayers()) do
+		if player ~= plr then
+			table.insert(players, player)
+			table.insert(playerNames, player.Name)
+		end
+	end
+	
+	if #players == 0 then
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Нет других игроков для наблюдения!"})
+		vals.Spectating = false
+		return
+	end
+	
+	if not table.find(players, vals.SpectatePlayer) then
+		vals.SpectatePlayer = players[1]
+	end
+	
+	lib.Notifications:Notification({Title = "Спектатор", Text = "Найдено игроков: " .. #players})
+end})
+
+page:AddButton({Caption = "Вернуться к себе", Callback = function()
+	if not vals.Spectating then 
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Спектатор уже выключен!"})
+		return
+	end
+	
+	vals.Spectating = false
+	if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+		workspace.CurrentCamera.CameraSubject = plr.Character.Humanoid
+		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+	end
+	
+	lib.Notifications:Notification({Title = "Спектатор", Text = "Режим наблюдения выключен"})
+end})
+
+page:AddSlider({Caption = "Дистанция камеры", Default = 10, Min = 2, Max = 50, Step = 0.5, Callback = function(b)
+	vals.SpectateZoom = b
+end})
+
+page:AddButton({Caption = "Отдалить камеру", Callback = function()
+	if not vals.Spectating then 
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Сначала включите режим наблюдения!"})
+		return
+	end
+	
+	vals.SpectateZoom = math.min(vals.SpectateZoom + 5, 50)
+end})
+
+page:AddButton({Caption = "Приблизить камеру", Callback = function()
+	if not vals.Spectating then 
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Сначала включите режим наблюдения!"})
+		return
+	end
+	
+	vals.SpectateZoom = math.max(vals.SpectateZoom - 5, 2)
+end})
+
+page:AddSlider({Caption = "Угол обзора", Default = 0, Min = 0, Max = 360, Step = 5, Callback = function(b)
+	vals.SpectateAngle = b
+end})
+
+page:AddSlider({Caption = "Высота камеры", Default = 5, Min = 0, Max = 20, Step = 0.5, Callback = function(b)
+	vals.SpectateHeight = b
+end})
+
+page:AddToggle({Caption = "Автоповорот камеры", Default = false, Callback = function(b)
+	vals.SpectateAutoRotate = b
+end})
+
+page:AddLabel({Caption = "Используйте спектатор для наблюдения за другими игроками"})
+
+page:AddSeparator()
+
 local activated = false
 page:AddToggle({Caption = "RGB ESP (might cause FPS issues, careful!)", Default = false, Callback = function(b)
 	if not activated then activated = true return end
@@ -1302,7 +1520,7 @@ if hmm and gncm then
 	page:AddSeparator()
 
 	page:AddToggle({Caption = "Save bullets", Default = false, Callback = function(b)
-		vals.SaveBullets = b
+		vals.SaveBults = b
 	end})
 	page:AddLabel({Caption = "Better dont ^^^ this because unstable + can't kill animals"})
 	page:AddLabel({Caption = "Save bullets cancels the shoot if theres no alive zombies around"})
@@ -1338,3 +1556,35 @@ page:AddButton({Caption = "Glitch train", Callback = function()
 end})
 
 espFunc(workspace:WaitForChild("Train", 9e9), {HighlightEnabled = false, Color = Color3.fromRGB(55, 65, 65), Text = "Train", ESPName = "Train (the most useful)ESP"})
+
+-- Добавляем обработчики для списка игроков в спектаторе
+cons[#cons+1] = game.Players.PlayerAdded:Connect(function(player)
+	if vals.Spectating then
+		lib.Notifications:Notification({Title = "Спектатор", Text = "Новый игрок: " .. player.Name})
+	end
+end)
+
+cons[#cons+1] = game.Players.PlayerRemoving:Connect(function(player)
+	if vals.Spectating and vals.SpectatePlayer == player then
+		-- Если наблюдаемый игрок отключился, переключаемся на другого
+		local players = {}
+		
+		for _, p in pairs(game.Players:GetPlayers()) do
+			if p ~= plr and p ~= player then
+				table.insert(players, p)
+			end
+		end
+		
+		if #players > 0 then
+			vals.SpectatePlayer = players[1]
+			lib.Notifications:Notification({Title = "Спектатор", Text = "Игрок отключился. Переключение на: " .. vals.SpectatePlayer.Name})
+		else
+			vals.Spectating = false
+			if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+				workspace.CurrentCamera.CameraSubject = plr.Character.Humanoid
+				workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+			end
+			lib.Notifications:Notification({Title = "Спектатор", Text = "Все игроки вышли. Режим наблюдения выключен."})
+		end
+	end
+end)
